@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - arm
   pull_request:
     branches:
       - master
@@ -11,17 +12,22 @@ on:
 jobs:
   build_ubuntu_x11:
     name: Build Ubuntu X11
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.cfg.os }}
+    strategy:
+      matrix:
+        cfg:
+        - { os: ubuntu-22.04,     host: linux,       arch: x86_64 }
+        - { os: ubuntu-24.04-arm, host: linux_arm64, arch: aarch64 }
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
 
-      - uses: jurplel/install-qt-action@v3
+      - uses: Kidev/install-qt-action@v5
         with:
           version: 5.12.9
-          host: linux
+          host: ${{ matrix.cfg.host }}
 
       - name: Install Vulkan SDK
         run: |
@@ -42,14 +48,19 @@ jobs:
           CXX="clang++"
           qmake DEFINES+=X11 CONFIG+=release PREFIX=/usr
           make INSTALL_ROOT=appdir install ; find appdir/
-          wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-          chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+          wget -c -nv "https://github.com/q4a/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-${{matrix.cfg.arch}}.AppImage"
+          chmod a+x linuxdeployqt-continuous-${{matrix.cfg.arch}}.AppImage
           export VERSION=${TARGET_PLATFORM}
           cp vulkanCapsViewer.png appdir/usr/share/icons/hicolor/256x256/apps/vulkanCapsViewer.png
-          ./linuxdeployqt-continuous-x86_64.AppImage appdir/usr/share/applications/* -appimage
+          ./linuxdeployqt-continuous-${{matrix.cfg.arch}}.AppImage appdir/usr/share/applications/* -appimage
       - name: Upload
         if: github.ref == 'refs/heads/master'
-        run: curl -T Vulkan_Caps_Viewer-X11-x86_64.AppImage ftp://${{ secrets.FTP_USER_NAME }}:${{ secrets.FTP_PASS }}@${{ secrets.FTP_SERVER_NAME }}
+        run: curl -T Vulkan_Caps_Viewer-X11-${{matrix.cfg.arch}}.AppImage ftp://${{ secrets.FTP_USER_NAME }}:${{ secrets.FTP_PASS }}@${{ secrets.FTP_SERVER_NAME }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@main
+        with:
+          name: Vulkan_Caps_Viewer-X11-${{matrix.cfg.arch}}.AppImage.ci-${{ github.run_number }}
+          path: Vulkan_Caps_Viewer-X11-${{matrix.cfg.arch}}.AppImage
 
   build_ubuntu_wayland:
     name: Build Ubuntu Wayland
